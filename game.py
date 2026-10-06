@@ -9,23 +9,35 @@ BG = (30,35,25)
 
 
 class Zombie:
-    SPEED = 1.5
+    def __init__(self, x, y, z_type="normal"):
+        self.type = z_type
+        if z_type == "fast":
+            self.rect = pygame.Rect(x, y, 22, 22)
+            self.color = (200, 180, 50)  # Yellow
+            self.hp = 1
+            self.speed = 2.8
+        elif z_type == "tank":
+            self.rect = pygame.Rect(x, y, 42, 42)
+            self.color = (140, 50, 50)   # Dark Red
+            self.hp = 6
+            self.speed = 0.8
+        else:  # normal
+            self.rect = pygame.Rect(x, y, 30, 30)
+            self.color = (60, 140, 60)   # Green
+            self.hp = 3
+            self.speed = 1.5
 
-    def __init__(self, x, y):
-        self.rect = pygame.Rect(x, y, 30, 30)
-        self.color = (60,140,60)
-        self.hp = 3
         self.wobble = random.uniform(0, 6.28)
         self.frame = 0
 
     def update(self, player_pos):
         px, py = player_pos
         cx, cy = self.rect.center
-        dx, dy = px-cx, py-cy
-        dist = (dx**2+dy**2)**0.5
+        dx, dy = px - cx, py - cy
+        dist = (dx**2 + dy**2) ** 0.5
         if dist:
-            self.rect.x += int(dx/dist*self.SPEED)
-            self.rect.y += int(dy/dist*self.SPEED)
+            self.rect.x += int(dx / dist * self.speed)
+            self.rect.y += int(dy / dist * self.speed)
         self.frame += 1
 
     def hit(self):
@@ -33,18 +45,20 @@ class Zombie:
         return self.hp <= 0
 
     def draw(self, screen):
-        wobble_y = int(math.sin(self.frame*0.2)*3)
+        wobble_y = int(math.sin(self.frame * 0.2) * 3)
         draw_rect = self.rect.move(0, wobble_y)
         pygame.draw.rect(screen, self.color, draw_rect, border_radius=5)
-        for ex in [draw_rect.x+6, draw_rect.x+18]:
-            pygame.draw.circle(screen, (200,40,40), (ex, draw_rect.y+10), 4)
+        
+        eye_offset = 4 if self.type == "fast" else (8 if self.type == "tank" else 6)
+        for ex in [draw_rect.x + eye_offset, draw_rect.x + draw_rect.width - eye_offset - 4]:
+            pygame.draw.circle(screen, (200, 40, 40), (ex, draw_rect.y + 8), 3 if self.type == "fast" else 4)
 
 
 class Barrel:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, 28, 28)
         self.color = (180, 90, 30)
-        self.radius = 120  # Explosion radius
+        self.radius = 120
 
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect, border_radius=4)
@@ -53,11 +67,12 @@ class Barrel:
 
 def spawn_zombie(width, height, player_rect, margin=120):
     while True:
-        x = random.randint(0, width-30)
-        y = random.randint(0, height-30)
+        x = random.randint(0, width - 30)
+        y = random.randint(0, height - 30)
         rect = pygame.Rect(x, y, 30, 30)
         if not rect.colliderect(player_rect.inflate(margin, margin)):
-            return Zombie(x, y)
+            z_type = random.choices(["normal", "fast", "tank"], weights=[0.5, 0.3, 0.2])[0]
+            return Zombie(x, y, z_type)
 
 
 SPEED = 4
@@ -66,7 +81,7 @@ SPEED = 4
 class Player:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, 32, 32)
-        self.color = (60,160,220)
+        self.color = (60, 160, 220)
         self.bullets = []
         self.shoot_cooldown = 0
         self.hp = 3
@@ -82,9 +97,9 @@ class Player:
         if keys[pygame.K_s] or keys[pygame.K_DOWN]: dy = SPEED
         if keys[pygame.K_a] or keys[pygame.K_LEFT]: dx = -SPEED
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]: dx = SPEED
-        self.rect.x = max(0, min(width-self.rect.width, self.rect.x+dx))
-        self.rect.y = max(0, min(height-self.rect.height, self.rect.y+dy))
-        
+        self.rect.x = max(0, min(width - self.rect.width, self.rect.x + dx))
+        self.rect.y = max(0, min(height - self.rect.height, self.rect.y + dy))
+
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
         if self.invincible_timer > 0:
@@ -116,11 +131,11 @@ class Player:
 
         cx, cy = self.rect.center
         tx, ty = target_pos
-        dx, dy = tx-cx, ty-cy
-        dist = (dx**2+dy**2)**0.5
+        dx, dy = tx - cx, ty - cy
+        dist = (dx**2 + dy**2) ** 0.5
         if dist == 0: return
-        vx, vy = dx/dist*10, dy/dist*10
-        self.bullets.append([cx-4, cy-4, vx, vy])
+        vx, vy = dx / dist * 10, dy / dist * 10
+        self.bullets.append([cx - 4, cy - 4, vx, vy])
         self.shoot_cooldown = 15
         self.ammo -= 1
 
@@ -135,9 +150,9 @@ class Player:
     def draw(self, screen):
         if self.invincible_timer % 10 < 5:
             pygame.draw.rect(screen, self.color, self.rect, border_radius=6)
-            
+
         for b in self.bullets:
-            pygame.draw.circle(screen, (255,220,60), (int(b[0]), int(b[1])), 5)
+            pygame.draw.circle(screen, (255, 220, 60), (int(b[0]), int(b[1])), 5)
 
 
 class GameEngine:
@@ -152,7 +167,7 @@ class GameEngine:
         self.reset()
 
     def reset(self):
-        self.player = Player(WIDTH//2, HEIGHT//2)
+        self.player = Player(WIDTH // 2, HEIGHT // 2)
         self.zombies = [spawn_zombie(WIDTH, HEIGHT, self.player.rect) for _ in range(4)]
         self.barrels = [
             Barrel(150, 120),
@@ -255,35 +270,36 @@ class GameEngine:
     def draw(self):
         self.screen.fill(BG)
         for x in range(0, WIDTH, 60):
-            pygame.draw.line(self.screen, (40,45,35), (x,0), (x,HEIGHT), 1)
+            pygame.draw.line(self.screen, (40, 45, 35), (x, 0), (x, HEIGHT), 1)
         for y in range(0, HEIGHT, 60):
-            pygame.draw.line(self.screen, (40,45,35), (0,y), (WIDTH,y), 1)
+            pygame.draw.line(self.screen, (40, 45, 35), (0, y), (WIDTH, y), 1)
 
         for barrel in self.barrels:
             barrel.draw(self.screen)
-        for z in self.zombies: z.draw(self.screen)
+        for z in self.zombies:
+            z.draw(self.screen)
         self.player.draw(self.screen)
 
         for e in self.explosions:
             pygame.draw.circle(self.screen, (255, 120, 30), e['pos'], e['radius'], 3)
 
         hud_bg = pygame.Rect(0, 0, WIDTH, 40)
-        pygame.draw.rect(self.screen, (15,20,15), hud_bg)
-        
+        pygame.draw.rect(self.screen, (15, 20, 15), hud_bg)
+
         ammo_str = "RELOADING..." if self.player.reloading else f"Ammo: {self.player.ammo}/{self.player.max_ammo}"
         hud = self.font.render(
             f"HP: {self.player.hp}  {ammo_str}  Wave: {self.wave}  Score: {self.score}  Kills: {self.kills}/{self.kills_to_next}",
-            True, (160,220,120))
+            True, (160, 220, 120))
         self.screen.blit(hud, (8, 10))
-        
+
         if self.game_over:
             ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            ov.fill((0,0,0,160))
-            self.screen.blit(ov, (0,0))
-            m = self.big_font.render("DEVOURED!", True, (180,40,40))
-            s = self.font.render(f"Wave {self.wave} | Score {self.score} | Press R to Restart", True, (200,200,200))
-            self.screen.blit(m, (WIDTH//2-m.get_width()//2, HEIGHT//2-40))
-            self.screen.blit(s, (WIDTH//2-s.get_width()//2, HEIGHT//2+20))
+            ov.fill((0, 0, 0, 160))
+            self.screen.blit(ov, (0, 0))
+            m = self.big_font.render("DEVOURED!", True, (180, 40, 40))
+            s = self.font.render(f"Wave {self.wave} | Score {self.score} | Press R to Restart", True, (200, 200, 200))
+            self.screen.blit(m, (WIDTH // 2 - m.get_width() // 2, HEIGHT // 2 - 40))
+            self.screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 + 20))
         pygame.display.flip()
 
     def run(self):
