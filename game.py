@@ -58,6 +58,8 @@ class Player:
         self.color = (60,160,220)
         self.bullets = []
         self.shoot_cooldown = 0
+        self.hp = 3
+        self.invincible_timer = 0  # Invincibility frame counter
 
     def move(self, keys, width, height):
         dx = dy = 0
@@ -67,8 +69,18 @@ class Player:
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]: dx = SPEED
         self.rect.x = max(0, min(width-self.rect.width, self.rect.x+dx))
         self.rect.y = max(0, min(height-self.rect.height, self.rect.y+dy))
+        
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
+        if self.invincible_timer > 0:
+            self.invincible_timer -= 1
+
+    def take_damage(self):
+        if self.invincible_timer == 0:
+            self.hp -= 1
+            self.invincible_timer = 60  # 1 second invincibility at 60 FPS
+            return True
+        return False
 
     def shoot(self, target_pos):
         if self.shoot_cooldown > 0: return
@@ -78,9 +90,7 @@ class Player:
         dist = (dx**2+dy**2)**0.5
         if dist == 0: return
         vx, vy = dx/dist*10, dy/dist*10
-        self.bullets.append(pygame.Rect(cx-4, cy-4, 8, 8))
         self.bullets.append([cx-4, cy-4, vx, vy])
-        self.bullets.pop(-2)
         self.shoot_cooldown = 15
 
     def update_bullets(self, width, height):
@@ -92,7 +102,10 @@ class Player:
         self.bullets = live
 
     def draw(self, screen):
-        pygame.draw.rect(screen, self.color, self.rect, border_radius=6)
+        # Flicker effect during invincibility frames
+        if self.invincible_timer % 10 < 5:
+            pygame.draw.rect(screen, self.color, self.rect, border_radius=6)
+            
         for b in self.bullets:
             pygame.draw.circle(screen, (255,220,60), (int(b[0]), int(b[1])), 5)
 
@@ -103,7 +116,7 @@ class GameEngine:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Zombie Escape")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("monospace", 24)
+        self.font = pygame.font.SysFont("monospace", 18)
         self.big_font = pygame.font.SysFont("monospace", 44, bold=True)
         self.reset()
 
@@ -135,7 +148,9 @@ class GameEngine:
         for z in self.zombies:
             z.update(self.player.rect.center)
             if z.rect.colliderect(self.player.rect):
-                self.game_over = True
+                if self.player.take_damage():
+                    if self.player.hp <= 0:
+                        self.game_over = True
 
         dead = []
         for z in self.zombies:
@@ -169,10 +184,12 @@ class GameEngine:
         self.player.draw(self.screen)
         hud_bg = pygame.Rect(0, 0, WIDTH, 40)
         pygame.draw.rect(self.screen, (15,20,15), hud_bg)
+        
         hud = self.font.render(
-            f"Wave: {self.wave}  Score: {self.score}  Kills: {self.kills}/{self.kills_to_next}  |  WASD Move, Click Shoot, R Restart",
+            f"HP: {self.player.hp}  Wave: {self.wave}  Score: {self.score}  Kills: {self.kills}/{self.kills_to_next}",
             True, (160,220,120))
-        self.screen.blit(hud, (8, 8))
+        self.screen.blit(hud, (8, 10))
+        
         if self.game_over:
             ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             ov.fill((0,0,0,160))
